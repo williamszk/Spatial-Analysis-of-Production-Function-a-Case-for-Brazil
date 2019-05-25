@@ -1,0 +1,58 @@
+1	Los Angeles County	10,163,507
+2	San Diego County	3,337,685
+3	Orange County	3,190,400
+4	Riverside County	2,423,266
+5	San Bernardino County	2,157,404
+6	Santa Clara County	1,938,153
+7	Alameda County	1,663,190
+8	Sacramento County	1,530,615
+9	Contra Costa County	1,147,439
+10	Fresno County	989,255
+11	Kern County	893,119
+12	San Francisco County	884,363
+13	Ventura County	854,223
+14	San Mateo County	771,410
+15	San Joaquin County	745,424
+16	Stanislaus County	547,899
+17	Sonoma County	504,217
+18	Tulare County	464,493
+19	Santa Barbara County	448,150
+20	Solano County	445,458
+21	Monterey County	437,907
+22	Placer County	386,166
+23	San Luis Obispo County	283,405
+24	Santa Cruz County	275,897
+25	Merced County	272,673
+26	Marin County	260,955
+27	Butte County	229,294
+28	Yolo County	219,116
+29	El Dorado County	188,987
+30	Imperial County	182,830
+31	Shasta County	179,921
+32	Madera County	156,890
+33	Kings County	150,101
+34	Napa County	140,973
+35	Humboldt County	136,754
+36	Nevada County	99,814
+37	Sutter County	96,648
+38	Mendocino County	88,018
+39	Yuba County	77,031
+40	Lake County	64,246
+41	Tehama County	63,926
+42	San Benito County	60,310
+43	Tuolumne County	54,248
+44	Calaveras County	45,670
+45	Siskiyou County	43,853
+46	Amador County	38,626
+47	Lassen County	31,163
+48	Glenn County	28,094
+49	Del Norte County	27,470
+50	Colusa County	21,805
+51	Plumas County	18,742
+52	Inyo County	18,026
+53	Mariposa County	17,569
+54	Mono County	14,168
+55	Trinity County	12,709
+56	Modoc County	8,859
+57	Sierra County	2,999
+58	Alpine County	1,120

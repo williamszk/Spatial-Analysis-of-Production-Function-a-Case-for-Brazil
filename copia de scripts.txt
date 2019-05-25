@@ -1,0 +1,387 @@
+# 181009 contruir base copy
+
+# import the shape file of Brazilian municipalities
+
+library(sp)
+library(spdep)
+library(maptools)
+library(readxl)  
+library(lmtest)
+
+munic <- readShapePoly("RG2017_regioesgeograficas2017",
+                       proj4string = CRS("+proj=longlat +ellps=WGS84"))
+
+row.names(munic) <- as.character(munic$CD_GEOCODI) 
+plot(munic)#after making the graph use export file
+           #when the objective is to export a map
+
+#importing data about income
+pib <- read_excel("ipeadata_2002_pib.xlsx")
+pib <- as.data.frame(pib[,c(1,2,4)]) 
+names(pib) <- c("UF","cod_ibge","pib2002" )
+pib[,2] <- as.character(pib[,2])
+row.names(pib) <- pib[,2]
+
+#import data about population
+pop <- read_excel("ipeadata_2000_pop.xlsx")
+pop <- as.data.frame(pop[,c(2,4)]) 
+names(pop) <- c("cod_ibge","pop2000" )
+row.names(pop) <- as.character(pop[,1])
+
+#import data about human capital
+hc <- read_excel("ipeadata_2000_capital_humano.xlsx")
+hc <- as.data.frame(hc[,c(2,4)]) 
+names(hc) <- c("cod_ibge","hc2000" )
+row.names(hc) <- as.character(hc[,1])
+
+#import data about physical capital
+pc <- read_excel("ipeadata_2000_capital_fisico.xlsx")
+pc <- as.data.frame(pc[,c(2,4)]) 
+names(pc) <- c("cod_ibge","pc2000" )
+row.names(pc) <- as.character(pc[,1])
+
+#table for fixing the problem with cod mun ibge from inst
+hold0 <- as.data.frame( cbind(pc[,1], substr(pc[,1],1,6)))
+row.names(hold0) <- substr(pc[,1],1,6)
+names(hold0) <- c('cod_ibge2','cod_ibge')
+
+#import data about institutions
+hold1 <- read_excel("iqim_MP.xlsx") #import the data
+hold1 <- as.data.frame(hold1)        #transform it into a data frame
+inst <- as.data.frame(hold1$cod_ibge)  #create a new data frame
+row.names(inst) <- hold1$cod_ibge   #include row names into the data-frame
+                                    #the first column are the code of ibge
+
+#we need now to make the data numeric because originally it is in character
+inst[,2] <- as.numeric(gsub(",", ".",hold1$existencia_conselho))
+inst[,3] <- as.numeric(gsub(",", ".",hold1$conselhos_instalados))
+inst[,4] <- as.numeric(gsub(",", ".",hold1$conselhos_partidarios))
+inst[,5] <- as.numeric(gsub(",", ".",hold1$conselhos_deliberativos))
+inst[,6] <- as.numeric(gsub(",", ".",hold1$conselhos_fundos))
+inst[,7] <- as.numeric(gsub(",", ".",hold1$existencia_consorcios))
+inst[,8] <- as.numeric(gsub(",", ".",hold1$receita_corrente_divida))
+inst[,9] <- as.numeric(gsub(",", ".",hold1$poupanca_real_capita))
+inst[,10] <- as.numeric(gsub(",", ".",hold1$iptu_ano_planta))
+inst[,11] <- as.numeric(gsub(",", ".",hold1$iptu_adimplencia))
+inst[,12] <- as.numeric(gsub(",", ".",hold1$instrumentos_gestao))
+inst[,13] <- as.numeric(gsub(",", ".",hold1$instrumentos_planejamento))
+inst[,14] <- as.numeric(gsub(",", ".",hold1$iqim))
+#assign names for the variables in the dataset
+names(inst) <- names(hold1)
+
+#merge for fixing of cod_ibge from inst because it have 6 digits
+hold2 <- merge(inst,hold0,by='cod_ibge',all=TRUE)
+row.names(hold2) <- as.character(hold2$cod_ibge2)
+hold2 <- hold2[,-1]
+names(hold2) <- c(names(hold2)[1:13],'cod_ibge')
+hold2 <- hold2[,c(14,1:13)]
+inst <- hold2
+
+#correction of rounding numbers in the inst dataset
+#the data will be more precise with this
+
+#"existencia_conselho" 4%       
+#"conselhos_instalados"  4%   
+#"conselhos_partidarios"   7%  
+#"conselhos_deliberativos" 7%     
+#"conselhos_fundos" 11%         
+#"existencia_consorcios" 11%     
+#"receita_corrente_divida" 11%   
+#"poupanca_real_capita" 11%     
+#"iptu_ano_planta" 8%           
+#"iptu_adimplencia" 8%         
+#"instrumentos_gestao" 8%      
+#"instrumentos_planejamento" 8%
+attach(inst)
+iqim2 <- existencia_conselho*.04+
+  conselhos_instalados*.04+
+  conselhos_partidarios*.07+
+  conselhos_deliberativos*.07+
+  conselhos_fundos*.11+
+  existencia_consorcios*.11+
+  receita_corrente_divida*.11+
+  poupanca_real_capita*.11+
+  iptu_ano_planta*.08+
+  iptu_adimplencia*.08+
+  instrumentos_gestao*.8+
+  instrumentos_planejamento*.8
+detach(inst)
+iqim2 <- ((iqim2 - summary(iqim2)[1])/(summary(iqim2)[6]-summary(iqim2)[1]))*5+1
+
+
+#see the difference of using one or the other iqim, with correction and
+#the original iqim
+plot(inst$iqim,iqim2-inst$iqim)
+summary(iqim2-inst$iqim)
+#there is a big difference it can come till 2 and -1.28
+cor.test(inst$iqim,iqim2)
+#clearly there is a correlation
+cor.test(inst$iqim,iqim2-inst$iqim)
+#but there is also a correlation between the original iqim
+#and the difference to the new one with the old.
+#the result means that the new iqim tends to give higher scores
+#to the regions that had high scores in the old iqim.
+#let us use the new one. 
+
+inst[,14] <- iqim2
+
+#use only the iqim in the inst database
+iqim <- as.data.frame(inst[,c(1,14)])
+
+#merge of iqim, pib, hc, pc
+base <- merge(iqim, pib, by='cod_ibge', all=TRUE)
+base <- merge(base, pop, by='cod_ibge', all=TRUE)
+base <- merge(base, hc, by='cod_ibge', all=TRUE)
+base <- merge(base, pc, by='cod_ibge', all=TRUE)
+#change order of variables
+base <- base[,c(1,2,4,5,6,7,3)]
+
+#create a variable which is the income per capita
+inc <- as.data.frame(base$pib2002/base$pop2000) 
+row.names(inc) <- row.names(base)
+base[,8] <- inc
+names(base) <- c(names(base)[1:7],"inc")
+
+#create variable: human capital per capita
+hcpc <- as.data.frame(base$hc2000/base$pop2000) 
+row.names(hcpc) <- row.names(base)
+base[,9] <- hcpc
+names(base) <- c(names(base)[1:8],"hcpc")
+
+#create variable: physical capital per capita
+pcpc <- as.data.frame(base$pc2000/base$pop2000) 
+row.names(pcpc) <- row.names(base)
+base[,10] <- pcpc
+names(base) <- c(names(base)[1:9],"pcpc")
+
+#change the previous names to new ones: hcpc -> hc etc...
+base <- base[,c(1,2,7,8,9,10)]
+names(base) <- c("cod_ibge", "iqim",'UF',"inc","hc","pc")
+
+
+#build variable for region
+region <- substr(base[,1],1,1)
+for (i in 1:dim(base)[1]) {
+  if (region[i] == '1') {region[i] <- "Norte"}  
+  if (region[i] == '2') {region[i] <- "Nordeste"}  
+  if (region[i] == '3') {region[i] <- "Sudeste"}
+  if (region[i] == '4') {region[i] <- "Sul"}
+  if (region[i] == '5') {region[i] <- "Centro-Oeste"}  
+}
+base[,7] <- region
+names(base) <- c(names(base)[1:6],'region')
+
+
+#incorporate the data into the spatial polygons data frame
+munic <- munic[,c(2,3,4)]
+names(munic) <- c('cidade','cod_ibge','cod_UF')
+data <- merge(munic, base, by='cod_ibge')
+
+
+
+
+
+#################################################################
+## regressions and analysis  TENHO QUE CORRIGIR REVER
+#################################################################
+#make liner regression of income and institutions
+formula1 <- log(base$inc) ~ base$iqim
+model1 <- lm(formula1)
+summary(model1)
+dwtest(formula1)
+iqim_hold1 <- base$iqim[complete.cases(base$iqim)]
+summary(lm(model1$residuals ~ iqim_hold1))
+cor(model1$residuals,iqim_hold1)
+plot(base$iqim,log(base$inc),type='p')
+lines(aggregate(log(inc) ~iqim,base ,median))
+
+plot(density(log(base$inc[complete.cases(base$inc)])))
+plot(density(base$iqim[complete.cases(base$iqim)]))
+
+#linear regression of income and human capital and physical capital
+formula2 <- log(base$inc) ~ base$hcpc + base$pcpc
+model2 <- lm(formula2)
+summary(model2)
+plot(model2$residuals, type='l')
+
+
+
+#the relation between iqim and hcpc
+formula3 <- base$hcpc ~ base$iqim
+model3 <- lm(formula3)
+summary(model3)
+plot(base$iqim,base$hcpc,type='p')
+lines(aggregate(hcpc ~iqim, base ,median))
+
+#the relation between iqim and pcpc
+formula4 <- base$pcpc ~ base$iqim
+model4 <- lm(formula4)
+summary(model4)
+plot(base$iqim,base$pcpc,type='p')
+lines(aggregate(pcpc ~iqim, base ,mean))
+
+#the relation between human capital and physical capital
+summary(lm(base$pcpc ~ base$hcpc))
+summary(lm(base$hcpc ~ base$pcpc))
+plot(base$hcpc,base$pcpc,type='p')
+lines(aggregate(pcpc ~ hcpc, base ,mean))
+
+
+####################################################################
+
+
+# 181028 arbia inspired
+
+#the objective of this R file is to work through the examples and problems
+#that arise from Arbia's book a Primer.
+
+
+library(sp)
+library(spdep)
+library(maptools)
+library(readxl)  
+library(lmtest)
+library(magrittr)
+library(stats4)
+
+
+
+Wnb<-cell2nb(3,3,type="queen")
+Wnb
+W<-nb2listw(Wnb)
+W$weights
+WX<-lag.listw(W,X) #the spatially lagged variable of a variable X (say WX)
+
+mybase1 <- data[data$UF=='12',]
+plot(mybase1)
+
+contnb<-poly2nb(mybase1, queen=T)  #make neighbor data from the polygon
+#notice that we are using data, the base with municipalities of Brazil
+#contnb <- dnearneigh(coordinates(munic), 0, 380000, longlat=T) #build a neighbor data with minimum distance
+
+W1<-nb2listw(contnb, glist=NULL, style ="W") #transform the neighbor data 
+#into weight matrix
+#to row-standardize the weights we will have to: , style ="W"
+
+formula1 <- log(mybase1$inc) ~ mybase1$iqim
+model1 <- lm(formula1);summary(model1)
+lm.morantest(model1, W1)
+#for Acre there is no spatial dependence
+
+
+#analysis for MG
+basemg <- data[data$UF=='31',]
+contnb<-poly2nb(basemg, queen=T)
+Wmg<-nb2listw(contnb, glist=NULL, style ="W")
+formulamg <- log(inc) ~ iqim
+modelmg <- lm(formulamg)  ;  summary(modelmg)
+lm.morantest(modelmg, Wmg)
+plot(basemg$iqim,log(basemg$inc))
+lines(aggregate( log(basemg$inc) ~ basemg$iqim, basemg ,mean))
+
+##################################################################
+#the next is inspired by:
+#BurkeyAcademy Spatial Regression CheatSheet 0.6
+##################################################################
+
+#OLS
+reg.eq1 <- log(inc) ~ iqim
+reg1 <- lm(reg.eq1,data = basemg)
+summary(reg1)
+lm.morantest(reg1, Wmg)
+lm.LMtests(reg1, Wmg , test="all")
+
+
+
+#SLX Spatially Lagged X: y = X Beta + W X theta + e
+reg2 <- lmSLX(reg.eq1,data=basemg,Wmg)
+summary(reg2)
+lm.morantest(reg2,Wmg)
+impacts(reg2, listw = Wmg)
+summary(impacts(reg2,listw=Wmg,R=500),zstats=TRUE)
+
+#SAR Spatially Lag Model: y = rho W y + X Beta + e
+reg3 <- lagsarlm(reg.eq1, data=basemg , Wmg)
+summary(reg3)
+impacts(reg3, listw = Wmg)
+summary(impacts(reg3,listw=Wmg,R=500),zstats=TRUE) #demora muito
+
+
+
+#SEM Spatial Error Model: y = X Beta + u ; u = lambda W u + e
+reg4 <- errorsarlm(reg.eq1, data=basemg, Wmg)
+summary(reg4)
+
+
+#SDEM Spatial Durbin Error Model: y = X Beta + W X Theta + u ; u = lambda W u + e
+reg5 <- errorsarlm(reg.eq1, data=basemg , Wmg , etype="emixed")
+summary(reg5)
+impacts(reg5, listw = Wmg)
+summary(impacts(reg5 ,listw=Wmg,R=500),zstats=TRUE)
+
+#SDM Spatial Durbin Model: y = rho W y + X Beta + W X Theta + e
+reg6 <- lagsarlm(reg.eq1, data=basemg , Wmg , type="mixed")
+summary(reg6)
+impacts(reg6, listw = Wmg)
+summary(impacts(reg6 ,listw=Wmg,R=500),zstats=TRUE) #demora
+
+#Test model restrictions
+#reg3 = SAR
+#reg4 = SEM
+#reg6 = SDM
+LR.sarlm(reg6, reg3)
+LR.sarlm(reg6, reg4)
+
+
+#purely lag model
+y <- as.vector(log(basemg$inc))
+Wy<-lag.listw(Wmg,y)
+reg.eq2 <- y ~ Wy
+reg7 <- lm(reg.eq2)
+summary(reg7)
+
+#SARAR or SAC: 
+#y = rho W y + X beta = u
+#u = lambda W u + e
+reg7 <- sacsarlm(reg.eq1,data=basemg,Wmg, listw2= Wmg, type="sac")
+summary(reg7)
+impacts(reg7, listw = Wmg)
+
+##############################
+
+# 181008
+#notes on the book of Arbia, a primer on spatial econometrics
+
+
+library(spdep)
+Wnb<-cell2nb(3,3,type="queen")
+
+W<-nb2listw(Wnb) #The command indicates that we want to change our data from a list of
+                 #neighbors (nb) to (2) a weight matrix (listw).
+W$weights # In order to visualize the actual neighbors
+
+WX<-lag.listw(W,X) #the spatially lagged variable of a
+                   #variable X (say WX) can be easily obtained through the command
+
+
+#exercise 3.2
+Wnb<-cell2nb(5,5,type="rook")
+W<-nb2listw(Wnb)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
